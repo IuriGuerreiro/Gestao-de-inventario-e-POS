@@ -23,6 +23,14 @@ let db: Database | null = null;
 export async function initDatabase(): Promise<void> {
   if (db) return;
   db = await Database.load('sqlite:inventory_v2.db');
+  
+  // Migration: Add deleted_at column if it doesn't exist
+  try {
+    await db.execute('ALTER TABLE products ADD COLUMN deleted_at DATETIME DEFAULT NULL');
+  } catch (e: any) {
+    // Column likely already exists, ignore error
+  }
+
   await seedDatabaseIfNeeded(db);
 }
 
@@ -92,6 +100,7 @@ export async function getAllProducts(): Promise<Product[]> {
     `SELECT p.*, c.name as category_name
      FROM products p
      LEFT JOIN categories c ON p.category_id = c.id
+     WHERE p.deleted_at IS NULL
      ORDER BY p.name`
   );
 }
@@ -101,7 +110,7 @@ export async function getProductById(id: number): Promise<Product | null> {
     `SELECT p.*, c.name as category_name
      FROM products p
      LEFT JOIN categories c ON p.category_id = c.id
-     WHERE p.id = $1`,
+     WHERE p.id = $1 AND p.deleted_at IS NULL`,
     [id]
   );
   return results[0] || null;
@@ -113,7 +122,7 @@ export async function searchProducts(query: string): Promise<Product[]> {
     `SELECT p.*, c.name as category_name
      FROM products p
      LEFT JOIN categories c ON p.category_id = c.id
-     WHERE p.name LIKE $1 OR p.sku LIKE $1 OR c.name LIKE $1
+     WHERE (p.name LIKE $1 OR p.sku LIKE $1 OR c.name LIKE $1) AND p.deleted_at IS NULL
      ORDER BY p.name`,
     [pattern]
   );
@@ -135,7 +144,7 @@ export async function getProductsByCategory(categoryId: number | string): Promis
     `SELECT p.*, c.name as category_name
      FROM products p
      LEFT JOIN categories c ON p.category_id = c.id
-     WHERE p.category_id = $1
+     WHERE p.category_id = $1 AND p.deleted_at IS NULL
      ORDER BY p.name`,
     [categoryId]
   );
@@ -146,7 +155,7 @@ export async function getLowStockProducts(): Promise<Product[]> {
     `SELECT p.*, c.name as category_name
      FROM products p
      LEFT JOIN categories c ON p.category_id = c.id
-     WHERE p.quantity <= p.min_quantity
+     WHERE p.quantity <= p.min_quantity AND p.deleted_at IS NULL
      ORDER BY p.quantity ASC`
   );
 }
@@ -191,7 +200,15 @@ export async function updateProduct(id: number, data: UpdateProduct): Promise<Pr
 }
 
 export async function deleteProduct(id: number): Promise<boolean> {
-  const result = await getDb().execute('DELETE FROM products WHERE id = $1', [id]);
+  // Soft delete: set deleted_at and modify SKU to allow reuse
+  // We append a timestamp to the SKU to avoid unique constraint violations if the user creates a new product with the same SKU
+  const result = await getDb().execute(
+    `UPDATE products 
+     SET deleted_at = CURRENT_TIMESTAMP, 
+         sku = CASE WHEN sku IS NOT NULL THEN sku || '_del_' || CAST(strftime('%s', 'now') AS TEXT) ELSE NULL END 
+     WHERE id = $1`, 
+    [id]
+  );
   return result.rowsAffected > 0;
 }
 

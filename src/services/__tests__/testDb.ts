@@ -21,7 +21,8 @@ const SCHEMA = `
     min_quantity INTEGER NOT NULL DEFAULT 0,
     category_id INTEGER REFERENCES categories(id),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted_at DATETIME DEFAULT NULL
   );
 
   CREATE TABLE IF NOT EXISTS sales (

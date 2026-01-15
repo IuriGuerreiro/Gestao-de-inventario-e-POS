@@ -79,6 +79,7 @@ export function createDatabaseService(db: DatabaseAdapter) {
       `SELECT p.*, c.name as category_name
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
+       WHERE p.deleted_at IS NULL
        ORDER BY p.name`
     );
   }
@@ -88,7 +89,7 @@ export function createDatabaseService(db: DatabaseAdapter) {
       `SELECT p.*, c.name as category_name
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
-       WHERE p.id = $1`,
+       WHERE p.id = $1 AND p.deleted_at IS NULL`,
       [id]
     );
     return results[0] || null;
@@ -100,7 +101,7 @@ export function createDatabaseService(db: DatabaseAdapter) {
       `SELECT p.*, c.name as category_name
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
-       WHERE p.name LIKE $1 OR p.sku LIKE $1 OR c.name LIKE $1
+       WHERE (p.name LIKE $1 OR p.sku LIKE $1 OR c.name LIKE $1) AND p.deleted_at IS NULL
        ORDER BY p.name`,
       [pattern]
     );
@@ -111,7 +112,7 @@ export function createDatabaseService(db: DatabaseAdapter) {
       `SELECT p.*, c.name as category_name
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
-       WHERE p.category_id = $1
+       WHERE p.category_id = $1 AND p.deleted_at IS NULL
        ORDER BY p.name`,
       [categoryId]
     );
@@ -122,7 +123,7 @@ export function createDatabaseService(db: DatabaseAdapter) {
       `SELECT p.*, c.name as category_name
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
-       WHERE p.quantity <= p.min_quantity
+       WHERE p.quantity <= p.min_quantity AND p.deleted_at IS NULL
        ORDER BY p.quantity ASC`
     );
   }
@@ -166,7 +167,13 @@ export function createDatabaseService(db: DatabaseAdapter) {
   }
 
   async function deleteProduct(id: number): Promise<boolean> {
-    const result = await db.execute('DELETE FROM products WHERE id = $1', [id]);
+    const result = await db.execute(
+      `UPDATE products 
+       SET deleted_at = CURRENT_TIMESTAMP, 
+           sku = CASE WHEN sku IS NOT NULL THEN sku || '_del_' || CAST(strftime('%s', 'now') AS TEXT) ELSE NULL END 
+       WHERE id = $1`, 
+      [id]
+    );
     return result.rowsAffected > 0;
   }
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Search, Filter, Plus, Package, Edit2, History, FolderPlus } from "lucide-react";
+import { Search, Filter, Plus, Package, Edit2, History, FolderPlus, Trash2 } from "lucide-react";
 import { useInventory } from "../../hooks/useInventory";
+import * as db from "../../services/database";
 import EditProductModal from "./EditProductModal";
 import CreateProductModal from "./CreateProductModal";
 import CreateCategoryModal from "./CreateCategoryModal";
@@ -25,6 +26,18 @@ const Inventory = () => {
     setSelectedCategory(val);
     const id = val === "" ? null : parseInt(val);
     filterByCategory(id);
+  };
+
+  const handleDelete = async (product: Product) => {
+    if (confirm(`Tem a certeza que deseja eliminar o produto "${product.name}"? Esta ação é irreversível.`)) {
+      try {
+        await db.deleteProduct(product.id);
+        refreshData();
+      } catch (error) {
+        console.error("Erro ao eliminar produto:", error);
+        alert("Não foi possível eliminar o produto. Verifique se existem vendas associadas.");
+      }
+    }
   };
 
   return (
@@ -157,9 +170,16 @@ const Inventory = () => {
                       <button
                         onClick={() => setEditingProduct(product)}
                         className="text-gray-400 hover:text-blue-600 p-2 rounded-lg hover:bg-blue-50 transition-colors"
-                        title="Editar Rápido"
+                        title="Editar"
                       >
                         <Edit2 size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(product)}
+                        className="text-gray-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                        title="Eliminar"
+                      >
+                        <Trash2 size={18} />
                       </button>
                     </div>
                   </td>
